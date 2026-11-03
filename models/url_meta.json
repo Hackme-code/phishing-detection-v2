@@ -1,0 +1,25 @@
+{
+  "features": [
+    "host_len",
+    "n_labels",
+    "n_dots",
+    "n_hyphens",
+    "n_digits",
+    "digit_ratio",
+    "letter_ratio",
+    "longest_label",
+    "sld_len",
+    "sld_entropy",
+    "tld_len",
+    "is_ip",
+    "suspicious_tld",
+    "hosting_platform",
+    "has_punycode",
+    "longest_digit_run",
+    "n_vowel_ratio",
+    "bait_words",
+    "tld_common"
+  ],
+  "low_max": 0.3,
+  "high_min": 0.5
+}

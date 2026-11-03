@@ -47,4 +47,9 @@ def extract_features(url: str) -> dict:
         "suspicious_tld": int(tld in SUSPICIOUS_TLDS),
         "hosting_platform": int(any(host == p or host.endswith("." + p) for p in HOSTING_PLATFORMS)),
         "has_punycode": int("xn--" in host),
+                "longest_digit_run": max((len(m) for m in re.findall(r"\d+", host)), default=0),
+        "n_vowel_ratio": sum(c in "aeiou" for c in host) / len(host) if host else 0.0,
+        "bait_words": sum(w in host for w in ("login", "secure", "account", "verify",
+                                              "update", "bank", "pay", "signin", "support", "confirm")),
+        "tld_common": int(tld in {"com", "org", "net", "edu", "gov", "uk", "de", "fr", "ca", "au"}),
     }
