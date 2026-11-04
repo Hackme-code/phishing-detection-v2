@@ -13,14 +13,17 @@ from src.features import extract_features, get_host  # noqa: E402
 
 
 @st.cache_resource
+@st.cache_resource
 def load():
-    model = joblib.load(ROOT / "models" / "url_model.joblib")
-    meta = json.loads((ROOT / "models" / "url_meta.json").read_text())
+    model = joblib.load(ROOT / "models" / "ngram_model.joblib")
+    meta = json.loads((ROOT / "models" / "ngram_meta.json").read_text())
     return model, meta
 
 
 model, meta = load()
 LOW_MAX, HIGH_MIN = meta["low_max"], meta["high_min"]
+tfidf, clf = model.steps[0][1], model.steps[1][1]
+NAMES = tfidf.get_feature_names_out()
 URL_RE = re.compile(r"(?:https?://|www\.)[^\s<>\"')\]]+", re.IGNORECASE)
 BARE_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:/\S*)?$", re.IGNORECASE)
 
@@ -45,26 +48,30 @@ def band(p: float) -> str:
     return "LOW"
 
 
-def reasons(f: dict) -> list:
+def reasons(url: str, feats: dict, p: float) -> list:
     r = []
-    if f["is_ip"]:
+    if feats["is_ip"]:
         r.append("The host is an IP address")
-    if f["hosting_platform"]:
+    if feats["hosting_platform"]:
         r.append("Hosted on a free website platform")
-    if f["suspicious_tld"]:
+    if feats["suspicious_tld"]:
         r.append("Uses a TLD often abused for phishing")
-    if f["bait_words"]:
-        r.append("Host contains bait words (login, secure, verify...)")
-    if f["n_hyphens"] >= 2:
-        r.append(f"{f['n_hyphens']} hyphens in the host")
-    if f["longest_digit_run"] >= 4:
+    if feats["n_hyphens"] >= 2:
+        r.append(f"{feats['n_hyphens']} hyphens in the host")
+    if feats["longest_digit_run"] >= 4:
         r.append("Long run of digits in the host")
-    if f["n_labels"] >= 4:
-        r.append(f"{f['n_labels']} dot-separated parts (many subdomains)")
-    if f["host_len"] >= 30:
-        r.append(f"Long host name ({f['host_len']} characters)")
-    if f["has_punycode"]:
-        r.append("Contains punycode (possible look-alike characters)")
+    if feats["n_labels"] >= 4:
+        r.append(f"{feats['n_labels']} dot-separated parts (many subdomains)")
+
+    vec = tfidf.transform([get_host(url)])
+    contrib = vec.multiply(clf.coef_[0]).tocoo()
+    pairs = sorted(zip(contrib.data, contrib.col))
+    up = [NAMES[c] for v, c in pairs[::-1][:5] if v > 0]
+    down = [NAMES[c] for v, c in pairs[:5] if v < 0]
+    if p >= LOW_MAX and up:
+        r.append("Character patterns pushing toward phishing: " + ", ".join(f"`{x}`" for x in up))
+    elif down:
+        r.append("Character patterns pushing toward legitimate: " + ", ".join(f"`{x}`" for x in down))
     return r or ["No specific warning signs found in the host name"]
 
 
@@ -86,8 +93,7 @@ if st.button("Check", type="primary"):
         rows = []
         for u in links:
             feats = extract_features(u)
-            x = pd.DataFrame([feats])[meta["features"]]
-            p = float(model.predict_proba(x)[0, 1])
+            p = float(model.predict_proba([get_host(u)])[0, 1])
             rows.append((u, p, band(p), feats))
 
         order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
@@ -105,13 +111,14 @@ if st.button("Check", type="primary"):
                     st.warning(msg)
                 else:
                     st.success(msg + " (this does not mean the link is safe)")
-                for r in reasons(feats):
+                for r in reasons(u, feats, p):
                     st.write("- " + r)
 
 st.info(
-    "Limitations: only the host name is analysed. Paths, query strings, the page "
-    "content, the certificate and the email's wording are ignored. At the HIGH "
-    f"threshold ({HIGH_MIN:.2f}) the model catches about 67% of phishing hosts and "
-    "flags about 4% of legitimate ones, so a LOW result does not mean safe. It is a "
-    "first-layer screening aid, not a verdict."
+    "Limitations: only the host name is analysed. Paths, query strings, page content, "
+    "the certificate and the email's wording are ignored. On held-out domains, the HIGH "
+    f"band (probability of {HIGH_MIN:.2f} or more) caught about 68% of phishing hosts and "
+    "flagged about 4% of legitimate ones, so a LOW result does not mean safe. The training "
+    "data's legitimate sites are mostly government, education and non-profit, so brand "
+    "names and unusual TLDs can be misjudged. It is a first-layer screening aid, not a verdict."
 )
