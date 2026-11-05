@@ -1,3 +1,7 @@
+# AI Use Log
+
+| Date | Tool | What I asked (prompt) | What I did with the output | How I checked/validated it |
+|------|------|----------------------|----------------------------|----------------------------|
 | 02/11/2026 | Claude | Asked what to check in the PhiUSIIL dataset before modelling; ran the groupby checks it suggested on https, www and path | Found that every URL without https, without www, or with a path was phishing, so the label was largely determined by how URLs were collected. Decided to model host names only | Ran the checks myself on 235,795 rows and read the output (e.g. 100% phishing when https is False); looked at 15 sample hosts per class to confirm the pattern |
 | 02/11/2026 | Claude | Asked for a URL feature extractor (src/features.py) used for both training and the app | Saved it, tested it on four URLs (a PayPal link, a square.site host, an IP address and thechronicle.com), then added four more features | Checked each output by eye (IP flagged, platform flagged, www removed); confirmed the feature count went from 15 to 19 in my own Cell 2 output |
 | 02/11/2026 | Claude | Asked for a grouped train/test split and baseline models (Logistic Regression, Random Forest) on host features | Ran the cells, recorded recall about 0.63 to 0.67 | Confirmed hosts shared between train and test was 0; recomputed recall and precision from the confusion matrix counts; re-ran Cell 3 so all three models used the same 19 features |
