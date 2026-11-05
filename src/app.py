@@ -15,13 +15,14 @@ from src.features import extract_features, get_host  # noqa: E402
 @st.cache_resource
 @st.cache_resource
 def load():
-    model = joblib.load(ROOT / "models" / "ngram_model.joblib")
-    meta = json.loads((ROOT / "models" / "ngram_meta.json").read_text())
+    model = joblib.load(ROOT / "models" / "ngram_tranco_model.joblib")
+    meta = json.loads((ROOT / "models" / "ngram_tranco_meta.json").read_text())
     return model, meta
 
 
 model, meta = load()
 LOW_MAX, HIGH_MIN = meta["low_max"], meta["high_min"]
+ALLOW = set(meta["allowlist"])
 tfidf, clf = model.steps[0][1], model.steps[1][1]
 NAMES = tfidf.get_feature_names_out()
 URL_RE = re.compile(r"(?:https?://|www\.)[^\s<>\"')\]]+", re.IGNORECASE)
@@ -40,7 +41,9 @@ def find_links(text: str) -> list:
     return out
 
 
-def band(p: float) -> str:
+def band(p: float, host: str = "") -> str:
+    if host in ALLOW:
+        return "LOW" if p < HIGH_MIN else "MEDIUM"   # popular domain: cap at Medium
     if p >= HIGH_MIN:
         return "HIGH"
     if p >= LOW_MAX:
@@ -94,7 +97,7 @@ if st.button("Check", type="primary"):
         for u in links:
             feats = extract_features(u)
             p = float(model.predict_proba([get_host(u)])[0, 1])
-            rows.append((u, p, band(p), feats))
+            rows.append((u, p, band(p, get_host(u)), feats))
 
         order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
         rows.sort(key=lambda r: (order[r[2]], -r[1]))
